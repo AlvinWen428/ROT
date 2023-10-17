@@ -1,13 +1,10 @@
-import hydra
-import numpy as np
 from torch import autograd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import utils
-from agent.encoder import Encoder
-import time
+from agent.encoder.encoder import Encoder
 import copy
 
 

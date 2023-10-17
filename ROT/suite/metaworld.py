@@ -17,22 +17,38 @@ import metaworld
 
 CAMERA = {
 	'button-press-topdown-v2': 'corner',
+	'button-press-v2': 'corner',
 	'drawer-close-v2': 'corner',
 	'hammer-v2': 'corner3',
 	'door-open-v2': 'corner3',
 	'drawer-open-v2': 'corner',
 	'bin-picking-v2': 'corner',
-	'door-unlock-v2': 'corner'
+	'door-unlock-v2': 'corner',
+	'plate-slide-v2': 'corner',
+	'plate-slide-side-v2': 'corner',
+	'soccer-v2': 'corner',
+	'basketball-v2': 'corner',
+	'faucet-open-v2': 'corner',
+	'faucet-close-v2': 'corner',
+	'disassemble-v2': 'corner',
 }
 
 MAX_PATH_LENGTH = {
 	'button-press-topdown-v2': 125,
+	'button-press-v2': 125,
 	'drawer-close-v2': 125,
 	'hammer-v2': 125,		
 	'door-open-v2': 125,
 	'drawer-open-v2': 125,
 	'bin-picking-v2': 175,
-	'door-unlock-v2': 125
+	'door-unlock-v2': 125,
+	'plate-slide-v2': 125,
+	'plate-slide-side-v2': 125,
+	'soccer-v2': 125,
+	'basketball-v2': 125,
+	'faucet-open-v2': 125,
+	'faucet-close-v2': 125,
+	'disassemble-v2': 125,
 }
 
 
@@ -43,7 +59,7 @@ class RGBArrayAsObservationWrapper(dm_env.Environment):
 
 	From: https://github.com/hill-a/stable-baselines/issues/915
 	"""
-	def __init__(self, env, ml1, width=84, height=84, max_path_length=125, camera_name="corner"):
+	def __init__(self, env, ml1, width=224, height=224, max_path_length=125, camera_name="corner"):
 		self._env = env
 		self.ml1 = ml1
 		self._width = width
@@ -76,6 +92,15 @@ class RGBArrayAsObservationWrapper(dm_env.Environment):
 		self._obs_spec['features'] = specs.Array(shape=dummy_feat.shape,
 													  dtype=np.float32,
 													  name='observation')
+
+		self._obs_spec['raw_pixels'] = specs.BoundedArray(shape=self.observation_space.shape,
+														  dtype=np.uint8,
+														  minimum=0,
+														  maximum=255,
+														  name='pixels')
+		self._obs_spec['raw_features'] = specs.Array(shape=dummy_feat.shape,
+													 dtype=np.float32,
+													 name='features')
 
 
 	def reset(self, **kwargs):
@@ -128,8 +153,12 @@ class RGBArrayAsObservationWrapper(dm_env.Environment):
 class ExtendedTimeStep(NamedTuple):
 	step_type: Any
 	reward: Any
+	gt_reward: Any
 	discount: Any
 	observation: Any
+	features: Any
+	pixels: Any
+	goal_achieved: Any
 	action: Any
 
 	def first(self):
@@ -193,6 +222,14 @@ class FrameStackWrapper(dm_env.Environment):
 											maximum=255,
 											name='observation')
 		self._obs_spec['features'] = env.observation_spec()['features']
+
+		self._obs_spec['raw_pixels'] = specs.BoundedArray(shape=np.concatenate(
+			[[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
+			dtype=np.uint8,
+			minimum=0,
+			maximum=255,
+			name='pixels')
+		self._obs_spec['raw_features'] = env.observation_spec()['raw_features']
 
 	def _transform_observation(self, time_step):
 		assert len(self._frames) == self._num_frames
@@ -300,9 +337,13 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 			action_spec = self.action_spec()
 			action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
 		return ExtendedTimeStep(observation=time_step.observation,
+								pixels=time_step.observation['pixels'],
+								features=time_step.observation['features'],
+								goal_achieved=time_step.observation['goal_achieved'],
 								step_type=time_step.step_type,
 								action=action,
 								reward=time_step.reward or 0.0,
+								gt_reward=time_step.reward or 0.0,
 								discount=time_step.discount or 1.0)
 
 	def _replace(self, time_step, observation=None, action=None, reward=None, discount=None):
@@ -315,9 +356,13 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 		if discount is None:
 			discount = time_step.discount
 		return ExtendedTimeStep(observation=observation,
+								pixels=observation['pixels'],
+								features=observation['features'],
+								goal_achieved=time_step.observation['goal_achieved'],
 								step_type=time_step.step_type,
 								action=action,
 								reward=reward,
+								gt_reward=time_step.reward or 0.0,
 								discount=discount)
 
 
@@ -331,7 +376,7 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 		return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed):
+def make(name, img_width, img_height, frame_stack, action_repeat, seed):
 	ml1 = metaworld.ML1(name) # Construct the benchmark, sampling tasks
 	env = ml1.train_classes[name]()  # Create an environment with task
 	env.seed(seed)
@@ -339,9 +384,9 @@ def make(name, frame_stack, action_repeat, seed):
 	# Set a random task to be able to use env
 	task = random.choice(ml1.train_tasks)
 	env.set_task(task)  # Set task
-	
+
 	# add wrappers
-	env = RGBArrayAsObservationWrapper(env, ml1, max_path_length=MAX_PATH_LENGTH[name], camera_name=CAMERA[name])
+	env = RGBArrayAsObservationWrapper(env, ml1, width=img_width, height=img_height, max_path_length=MAX_PATH_LENGTH[name], camera_name=CAMERA[name])
 	env = ActionDTypeWrapper(env, np.float32)
 	env = ActionRepeatWrapper(env, action_repeat)
 	env = FrameStackWrapper(env, frame_stack)

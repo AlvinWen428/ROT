@@ -1,13 +1,11 @@
-import hydra
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import utils
-from agent.encoder import Encoder
+from agent.encoder.encoder import Encoder
 from rewarder import optimal_transport_plan, cosine_distance, euclidean_distance
-import time
 import copy
 
 class Actor(nn.Module):
@@ -69,7 +67,9 @@ class POTILAgent:
 				 hidden_dim, critic_target_tau, num_expl_steps,
 				 update_every_steps, stddev_schedule, stddev_clip, use_tb, augment,
 				 rewards, sinkhorn_rew_scale, update_target_every,
-				 auto_rew_scale, auto_rew_scale_factor, suite_name, obs_type, bc_weight_type, bc_weight_schedule):
+				 auto_rew_scale, auto_rew_scale_factor, suite_name, obs_type, bc_weight_type, bc_weight_schedule,
+				 policy_encoder_backbone_name, policy_encoder_backbone_pretrained,
+				 rewarder_encoder_backbone_name, rewarder_encoder_backbone_pretrained, rewarder_use_trunk, update_rewarder_encoder):
 		self.device = device
 		self.lr = lr
 		self.critic_target_tau = critic_target_tau
@@ -87,18 +87,27 @@ class POTILAgent:
 		self.use_encoder = True if obs_type=='pixels' else False
 		self.bc_weight_type = bc_weight_type
 		self.bc_weight_schedule = bc_weight_schedule
+		self.update_rewarder_encoder = update_rewarder_encoder
+		self.rewarder_use_trunk = rewarder_use_trunk
 
 		# models
 		if self.use_encoder:
-			self.encoder = Encoder(obs_shape).to(device)
-			self.encoder_target = Encoder(obs_shape).to(device)
+			self.encoder = Encoder(policy_encoder_backbone_name, obs_shape, policy_encoder_backbone_pretrained, device).to(device)
+			self.encoder_target = Encoder(rewarder_encoder_backbone_name, obs_shape, rewarder_encoder_backbone_pretrained, device).to(device)
 			repr_dim = self.encoder.repr_dim
+			if policy_encoder_backbone_name != rewarder_encoder_backbone_name:
+				assert not self.update_rewarder_encoder
+			if not self.update_rewarder_encoder:
+				utils.freeze_model(self.encoder_target)
 		else:
 			repr_dim = obs_shape[0]
 
-		self.trunk_target = nn.Sequential(
-			nn.Linear(repr_dim, feature_dim),
-			nn.LayerNorm(feature_dim), nn.Tanh()).to(device)
+		if self.rewarder_use_trunk:
+			self.trunk_target = nn.Sequential(
+				nn.Linear(repr_dim, feature_dim),
+				nn.LayerNorm(feature_dim), nn.Tanh()).to(device)
+		else:
+			self.trunk_target = nn.Identity()
 
 		self.actor = Actor(repr_dim, action_shape, feature_dim,
 						   hidden_dim).to(device)
@@ -307,11 +316,14 @@ class POTILAgent:
 	def ot_rewarder(self, observations, demos, step):
 
 		if step % self.update_target_every == 0:
-			if self.use_encoder:
+			if self.use_encoder and self.update_rewarder_encoder:
 				self.encoder_target.load_state_dict(self.encoder.state_dict())
-			self.trunk_target.load_state_dict(self.actor.trunk.state_dict())
+			if self.rewarder_use_trunk:
+				self.trunk_target.load_state_dict(self.actor.trunk.state_dict())
 			self.target_updated = True
 
+		self.encoder_target.eval()
+		self.trunk_target.eval()
 		scores_list = list()
 		ot_rewards_list = list()
 		for demo in demos:
@@ -374,9 +386,10 @@ class POTILAgent:
 		for k, v in payload.items():
 			self.__dict__[k] = v
 		self.critic_target.load_state_dict(self.critic.state_dict())
-		if self.use_encoder:
+		if self.use_encoder and self.update_rewarder_encoder:
 			self.encoder_target.load_state_dict(self.encoder.state_dict())
-		self.trunk_target.load_state_dict(self.actor.trunk.state_dict())
+		if self.rewarder_use_trunk:
+			self.trunk_target.load_state_dict(self.actor.trunk.state_dict())
 
 		if self.bc_weight_type == "qfilter":
 			# Store a copy of the BC policy with frozen weights

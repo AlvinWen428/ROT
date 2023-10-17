@@ -28,7 +28,7 @@ weight: '/path/to/dir/weights/${suite.name}_${obs_type}/${task_name}/drqv2.pt'
 
 hydra:
   run:
-    dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${experiment}
+    dir: /nvme/cw/result/cross_embodiment/ROT/exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${experiment}
   sweep:
     dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${experiment}
     subdir: ${hydra.job.num}

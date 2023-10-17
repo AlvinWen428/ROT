@@ -1,13 +1,9 @@
-import hydra
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import utils
-from agent.encoder import Encoder
-from rewarder import optimal_transport_plan, cosine_distance, euclidean_distance
-import time
+from agent.encoder.encoder import Encoder
 import copy
 
 class Actor(nn.Module):

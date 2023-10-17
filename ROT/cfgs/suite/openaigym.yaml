@@ -23,6 +23,7 @@ num_eval_episodes: 10
 
 # snapshot
 save_snapshot: true
+save_whole_buffer: false
 
 task_make_fn:
   _target_: suite.openaigym.make

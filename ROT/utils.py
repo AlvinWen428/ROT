@@ -27,6 +27,11 @@ class eval_mode:
         return False
 
 
+def freeze_model(model):
+    for param in model.parameters():
+        param.requires_grad = False
+
+
 def set_seed_everywhere(seed):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -190,6 +195,19 @@ class RandomShiftsAug(nn.Module):
                              grid,
                              padding_mode='zeros',
                              align_corners=False)
+
+
+class ImageNormalize(nn.Module):
+    def __init__(self, max_value, mean, std, device=None):
+        super(ImageNormalize, self).__init__()
+        self.max_value = max_value
+        self.mean = torch.tensor(mean)[None, None, :, None, None].to(device)
+        self.std = torch.tensor(std)[None, None, :, None, None].to(device)
+
+    def forward(self, x):
+        rescaled_x = x / self.max_value
+        normalized_x = (rescaled_x - self.mean) / self.std
+        return normalized_x
 
 
 class TorchRunningMeanStd:

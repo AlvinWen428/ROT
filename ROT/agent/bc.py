@@ -1,10 +1,8 @@
-import numpy as np
 import torch
-from torch import nn, optim, distributions
-from torch.nn import functional as F
+from torch import nn
 
 import utils
-from agent.encoder import Encoder
+from agent.encoder.encoder import Encoder
 
 
 class Actor(nn.Module):
@@ -35,7 +33,8 @@ class Actor(nn.Module):
 
 class BCAgent:
 	def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
-				 hidden_dim, stddev_schedule, stddev_clip, use_tb, augment, suite_name, obs_type):
+				 hidden_dim, stddev_schedule, stddev_clip, use_tb, augment, suite_name, obs_type,
+				 policy_encoder_backbone_name, policy_encoder_backbone_pretrained):
 		self.device = device
 		self.lr = lr
 		self.stddev_schedule = stddev_schedule
@@ -46,7 +45,7 @@ class BCAgent:
 
 		# models
 		if self.use_encoder:
-			self.encoder = Encoder(obs_shape).to(device)
+			self.encoder = Encoder(policy_encoder_backbone_name, obs_shape, policy_encoder_backbone_pretrained, device).to(device)
 			repr_dim = self.encoder.repr_dim
 		else:
 			repr_dim = obs_shape[0]

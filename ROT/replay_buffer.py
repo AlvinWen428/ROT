@@ -77,7 +77,7 @@ class ReplayBufferStorage:
 
 class ReplayBuffer(IterableDataset):
     def __init__(self, replay_dir, max_size, num_workers, nstep, discount,
-                 fetch_every, save_snapshot):
+                 fetch_every, save_snapshot, save_whole_buffer):
         self._replay_dir = replay_dir
         self._size = 0
         self._max_size = max_size
@@ -89,6 +89,7 @@ class ReplayBuffer(IterableDataset):
         self._fetch_every = fetch_every
         self._samples_since_last_fetch = fetch_every
         self._save_snapshot = save_snapshot
+        self._save_whole_buffer = save_whole_buffer
 
     def _sample_episode(self):
         eps_fn = random.choice(self._episode_fns)
@@ -104,7 +105,8 @@ class ReplayBuffer(IterableDataset):
             early_eps_fn = self._episode_fns.pop(0)
             early_eps = self._episodes.pop(early_eps_fn)
             self._size -= episode_len(early_eps)
-            early_eps_fn.unlink(missing_ok=True)
+            if not self._save_whole_buffer:
+                early_eps_fn.unlink(missing_ok=True)
         self._episode_fns.append(eps_fn)
         self._episode_fns.sort()
         self._episodes[eps_fn] = episode
@@ -199,7 +201,7 @@ def _worker_init_fn(worker_id):
 
 
 def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
-                       save_snapshot, nstep, discount):
+                       save_snapshot, save_whole_buffer, nstep, discount):
     max_size_per_worker = max_size // max(1, num_workers)
 
     iterable = ReplayBuffer(replay_dir,
@@ -208,7 +210,8 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                             nstep,
                             discount,
                             fetch_every=1000,
-                            save_snapshot=save_snapshot)
+                            save_snapshot=save_snapshot,
+                            save_whole_buffer=save_whole_buffer)
 
     loader = torch.utils.data.DataLoader(iterable,
                                          batch_size=batch_size,

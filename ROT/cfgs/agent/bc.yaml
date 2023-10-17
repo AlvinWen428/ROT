@@ -12,3 +12,5 @@ stddev_clip: 0.3
 augment: True
 suite_name: ${suite.name}
 obs_type: ${obs_type}
+policy_encoder_backbone_name: 'simple_conv'
+policy_encoder_backbone_pretrained: None

@@ -22,3 +22,9 @@ suite_name: ${suite.name}
 obs_type: ${obs_type}
 bc_weight_type: ${bc_weight_type}
 bc_weight_schedule: 'linear(1.0,0.1,20000)'
+policy_encoder_backbone_name: 'simple_conv'
+policy_encoder_backbone_pretrained: ''
+rewarder_encoder_backbone_name: 'simple_conv'
+rewarder_encoder_backbone_pretrained: ''
+rewarder_use_trunk: True
+update_rewarder_encoder: True
